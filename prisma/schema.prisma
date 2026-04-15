@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  role         String 
+  createdAt    DateTime @default(now())
+
+  createdEpisodes      Episode[]    @relation("CreatedEpisodes")
+  assignments          Assignment[] @relation("NurseAssignments")
+  handoverFrom         Assignment[] @relation("HandoverFrom")
+  enteredVitals        Vitals[]
+  sentMessages         Message[]
+  updatedTasks         TaskStatus[]
+  auditLogs            AuditLog[]
+  refreshTokens        RefreshToken[]
+  createdPatients      Patient[]    @relation("PatientCreator")
+  doctorInstructions   Instruction[] @relation("DoctorInstructions")
+}
+
+model Patient {
+  patient_id String   @id
+  name       String
+  age        Int?
+  gender     String?
+  procedure  String?
+  allergies  String?
+  createdAt  DateTime @default(now())
+  
+  createdByUserId String?
+  createdBy       User?     @relation("PatientCreator", fields: [createdByUserId], references: [id])
+  
+  episodes     Episode[]
+  instructions Instruction[]
+}
+
+model Episode {
+  id              String        @id @default(uuid())
+  patientId       String
+  patient         Patient       @relation(fields: [patientId], references: [patient_id])
+  status          String        @default("ACTIVE") 
+  bedNumber       String?
+  startTime       DateTime      @default(now())
+  endTime         DateTime?
+  createdByUserId String
+  createdBy       User          @relation("CreatedEpisodes", fields: [createdByUserId], references: [id])
+  createdAt       DateTime      @default(now())
+  assignments     Assignment[]
+  vitals          Vitals[]
+  messages        Message[]
+}
+
+model Assignment {
+  id                  String   @id @default(uuid())
+  episodeId           String
+  episode             Episode  @relation(fields: [episodeId], references: [id])
+  nurseId             String
+  nurse               User     @relation("NurseAssignments", fields: [nurseId], references: [id])
+  fromTime            DateTime @default(now())
+  toTime              DateTime?
+  handedOverToNurseId String?
+  handedOverTo        User?    @relation("HandoverFrom", fields: [handedOverToNurseId], references: [id])
+  handoverNote        String?
+  createdAt           DateTime @default(now())
+}
+
+model Vitals {
+  id              String   @id @default(uuid())
+  episodeId       String
+  episode         Episode  @relation(fields: [episodeId], references: [id])
+  recordedAt      DateTime
+  systolicBP      Int?
+  diastolicBP     Int?
+  heartRate       Int?
+  spo2            Int?
+  respiratoryRate Int?
+  temperature     Float?
+  painScore       Int?
+  recoveryScore   Int?
+  remarks         String?
+  enteredByUserId String
+  enteredBy       User     @relation(fields: [enteredByUserId], references: [id])
+  clientUuid      String?  
+  createdAt       DateTime @default(now())
+  @@unique([episodeId, recordedAt, enteredByUserId])
+  @@index([recordedAt])
+}
+
+model Message {
+  id           String      @id @default(uuid())
+  episodeId    String
+  episode      Episode     @relation(fields: [episodeId], references: [id])
+  senderUserId String
+  sender       User        @relation(fields: [senderUserId], references: [id])
+  type         String      @default("CHAT") 
+  text         String
+  priority     String      @default("NORMAL") 
+  createdAt    DateTime    @default(now())
+  taskStatus   TaskStatus?
+}
+
+model TaskStatus {
+  id              String         @id @default(uuid())
+  messageId       String         @unique
+  message         Message        @relation(fields: [messageId], references: [id])
+  status          String         @default("PENDING") 
+  updatedByUserId String?
+  updatedBy       User?          @relation(fields: [updatedByUserId], references: [id])
+  updatedAt       DateTime       @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String
+  actor       User     @relation(fields: [actorUserId], references: [id])
+  action      String
+  entity      String
+  entityId    String
+  oldValue    String? 
+  newValue    String? 
+  createdAt   DateTime @default(now())
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  email     String
+  otp       String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Instruction {
+  id          String   @id @default(uuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [patient_id], onDelete: Cascade)
+  doctorId    String
+  doctor      User     @relation("DoctorInstructions", fields: [doctorId], references: [id])
+  instruction String
+  createdAt   DateTime @default(now())
+}
